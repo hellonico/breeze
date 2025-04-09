@@ -25,11 +25,24 @@
 (defn handle-token [token]
       (swap! app-state update-in [:messages (dec (count (:messages @app-state))) :content] str token))
 
+;(defn handle-message! [{:keys [event]}]
+;      (let [[id data] event]
+;           (case id
+;                 :chat/token (handle-token data)
+;                 :chat/done (swap! app-state assoc :streaming? false)
+;                 nil)))
+
 (defn handle-message! [{:keys [event]}]
       (let [[id data] event]
            (case id
                  :chat/token (handle-token data)
-                 :chat/done  (swap! app-state assoc :streaming? false)
+                 :chat/done (do
+                             ;; Stop the streaming indicator
+                             (swap! app-state assoc :streaming? false)
+                             ;; Update the last assistant message once streaming finishes
+                             ;(swap! app-state update :messages
+                             ;       #(conj (butlast %) {:role :assistant :content (str "Streaming complete!")}))
+                             )
                  nil)))
 
 (defonce stop-router! (atom nil))
@@ -46,18 +59,34 @@
 (add-watch app-state :scroll
            (fn [_ _ _ _] (js/setTimeout scroll-to-bottom! 50)))
 
-;; --- Send Prompt ---
+;;; --- Send Prompt ---
+;(defn send-prompt! []
+;      (let [input (:input @app-state)]
+;           (when (not (clojure.string/blank? input))
+;                 (swap! app-state update :messages conj {:role :user :content input})
+;                 (swap! app-state update :messages conj {:role :assistant :content ""})
+;                 (swap! app-state assoc :input "" :streaming? true)
+;                 (chsk-send!
+;                  [:chat/start
+;                   {:url      "http://localhost:11434"
+;                    :model    "llama3.2"
+;                    :messages [{:role :user :content input}]}]))))
 (defn send-prompt! []
       (let [input (:input @app-state)]
            (when (not (clojure.string/blank? input))
+                 ;; Add user message
                  (swap! app-state update :messages conj {:role :user :content input})
+                 ;; Add empty assistant message (we'll fill this as streaming progresses)
                  (swap! app-state update :messages conj {:role :assistant :content ""})
+                 ;; Clear the input field and set the streaming flag
                  (swap! app-state assoc :input "" :streaming? true)
+
+                 ;; Send the entire list of messages in the chat request
                  (chsk-send!
                   [:chat/start
                    {:url      "http://localhost:11434"
                     :model    "llama3.2"
-                    :messages [{:role :user :content input}]}]))))
+                    :messages (:messages @app-state)}]))))
 
 ;; --- Chat Bubble ---
 (defn message-bubble [{:keys [role content]}]

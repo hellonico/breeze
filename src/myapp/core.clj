@@ -13,11 +13,17 @@
   [clojure.core.async :as async :refer [<! >! go-loop]])
  (:gen-class))
 
+(defn user-id-fn [ring-req]
+ ;; You can generate a random UUID or use session ID
+ (get-in ring-req [:session :uid]))
+
 ;; Setup Sente
 (let [{:keys [ch-recv send-fn connected-uids ajax-post-fn ajax-get-or-ws-handshake-fn]}
       (sente/make-channel-socket-server!
        (get-sch-adapter)
-       {:packer :edn :csrf-token-fn nil})]
+       {:packer :edn
+        :user-id-fn user-id-fn
+        :csrf-token-fn nil})]
  (def ring-ajax-post ajax-post-fn)
  (def ring-ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn)
  (def ch-chsk ch-recv)
@@ -52,9 +58,18 @@
  (route/files "/")
  (route/not-found "Not Found"))
 
+(defn wrap-user-id [handler]
+ (fn [req]
+  (let [uid (or (get-in req [:session :uid])
+                (str (random-uuid)))
+        req' (assoc-in req [:session :uid] uid)]
+   (handler req'))))
+
+
 (def app
  (-> app-routes
      wrap-keyword-params
+     wrap-user-id
      wrap-params
      (wrap-cors :access-control-allow-origin [#"http://localhost:3000"])  ; adjust if needed
      (wrap-defaults site-defaults)))

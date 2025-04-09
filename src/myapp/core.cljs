@@ -21,27 +21,15 @@
      (def ch-chsk ch-recv)
      (def chsk-state state))
 
-;; --- Handle Streamed Tokens ---
 (defn handle-token [token]
       (swap! app-state update-in [:messages (dec (count (:messages @app-state))) :content] str token))
-
-;(defn handle-message! [{:keys [event]}]
-;      (let [[id data] event]
-;           (case id
-;                 :chat/token (handle-token data)
-;                 :chat/done (swap! app-state assoc :streaming? false)
-;                 nil)))
 
 (defn handle-message! [{:keys [event]}]
       (let [[id data] event]
            (case id
                  :chat/token (handle-token data)
                  :chat/done (do
-                             ;; Stop the streaming indicator
                              (swap! app-state assoc :streaming? false)
-                             ;; Update the last assistant message once streaming finishes
-                             ;(swap! app-state update :messages
-                             ;       #(conj (butlast %) {:role :assistant :content (str "Streaming complete!")}))
                              )
                  nil)))
 
@@ -59,18 +47,6 @@
 (add-watch app-state :scroll
            (fn [_ _ _ _] (js/setTimeout scroll-to-bottom! 50)))
 
-;;; --- Send Prompt ---
-;(defn send-prompt! []
-;      (let [input (:input @app-state)]
-;           (when (not (clojure.string/blank? input))
-;                 (swap! app-state update :messages conj {:role :user :content input})
-;                 (swap! app-state update :messages conj {:role :assistant :content ""})
-;                 (swap! app-state assoc :input "" :streaming? true)
-;                 (chsk-send!
-;                  [:chat/start
-;                   {:url      "http://localhost:11434"
-;                    :model    "llama3.2"
-;                    :messages [{:role :user :content input}]}]))))
 (defn send-prompt! []
       (let [input (:input @app-state)]
            (when (not (clojure.string/blank? input))
@@ -121,7 +97,7 @@
         :reagent-render
         (fn []
             [:div
-             [:h1.title "Streaming Chat"]
+             [:h1.title "Pyjama GPT"]
              [:div#chat-box.chat-container
               {:ref #(reset! scroll-ref %)}
               (for [[i msg] (map-indexed vector (:messages @app-state))]

@@ -6,9 +6,14 @@
   [taoensso.sente.packers.transit :as sente-transit]))
 
 ;; --- State ---
-(defonce app-state (r/atom {:messages   []
-                            :input      ""
-                            :streaming? false}))
+(defonce app-state
+         (r/atom {:input ""
+                  :messages []
+                  :streaming? false
+                  :active-page :chat ;; <- New
+                  :settings {:url "http://localhost:11434"
+                             :model "llama3.2"
+                             :system-prompt ""}}))
 
 ;; --- WebSocket Setup ---
 (let [{:keys [ch-recv send-fn state] :as chsk}
@@ -46,23 +51,78 @@
 
 (add-watch app-state :scroll
            (fn [_ _ _ _] (js/setTimeout scroll-to-bottom! 50)))
-
+;
+;(defn send-prompt! []
+;      (let [input (:input @app-state)]
+;           (when (not (clojure.string/blank? input))
+;                 ;; Add user message
+;                 (swap! app-state update :messages conj {:role :user :content input})
+;                 ;; Add empty assistant message (we'll fill this as streaming progresses)
+;                 (swap! app-state update :messages conj {:role :assistant :content ""})
+;                 ;; Clear the input field and set the streaming flag
+;                 (swap! app-state assoc :input "" :streaming? true)
+;
+;                 ;; Send the entire list of messages in the chat request
+;                 (chsk-send!
+;                  [:chat/start
+;                   {:url      "http://localhost:11434"
+;                    :model    "llama3.2"
+;                    :messages (:messages @app-state)}]))))
 (defn send-prompt! []
-      (let [input (:input @app-state)]
+      (let [{:keys [url model system-prompt]} (:settings @app-state)
+            input (:input @app-state)
+            base-messages (if (clojure.string/blank? system-prompt)
+                           [{:role :user :content input}]
+                           [{:role :system :content system-prompt}
+                            {:role :user :content input}])]
            (when (not (clojure.string/blank? input))
-                 ;; Add user message
                  (swap! app-state update :messages conj {:role :user :content input})
-                 ;; Add empty assistant message (we'll fill this as streaming progresses)
                  (swap! app-state update :messages conj {:role :assistant :content ""})
-                 ;; Clear the input field and set the streaming flag
                  (swap! app-state assoc :input "" :streaming? true)
-
-                 ;; Send the entire list of messages in the chat request
                  (chsk-send!
                   [:chat/start
-                   {:url      "http://localhost:11434"
-                    :model    "llama3.2"
-                    :messages (:messages @app-state)}]))))
+                   {:url      url
+                    :model    model
+                    :messages base-messages}]))))
+
+
+(defn nav-bar []
+      [:div.buttons
+       [:button.button.is-link
+        {:on-click #(swap! app-state assoc :active-page :chat)}
+        "Chat"]
+       [:button.button.is-link.is-light
+        {:on-click #(swap! app-state assoc :active-page :settings)}
+        "Settings"]])
+
+(defn settings-page []
+      (let [{:keys [url model system-prompt]} (:settings @app-state)]
+           [:div
+            [:h2.title "Settings"]
+            [:div.field
+             [:label.label "API URL"]
+             [:div.control
+              [:input.input
+               {:type "text"
+                :value url
+                :on-change #(swap! app-state assoc-in [:settings :url] (.. % -target -value))}]]]
+
+            [:div.field
+             [:label.label "Model"]
+             [:div.control
+              [:input.input
+               {:type "text"
+                :value model
+                :on-change #(swap! app-state assoc-in [:settings :model] (.. % -target -value))}]]]
+
+            [:div.field
+             [:label.label "System Prompt"]
+             [:div.control
+              [:textarea.textarea
+               {:value system-prompt
+                :placeholder "Optional system-level prompt for the assistant"
+                :on-change #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
+
 
 ;; --- Chat Bubble ---
 (defn message-bubble [{:keys [role content]}]
@@ -90,7 +150,21 @@
                                       :disabled streaming?}
               "Send"]]]))
 
-;; --- Main App Component ---
+;;; --- Main App Component ---
+;(defn app []
+;      (r/create-class
+;       {:component-did-mount start-router!
+;        :reagent-render
+;        (fn []
+;            [:div
+;             [:h1.title "Pyjama GPT"]
+;             [:div#chat-box.chat-container
+;              {:ref #(reset! scroll-ref %)}
+;              (for [[i msg] (map-indexed vector (:messages @app-state))]
+;                   ^{:key i} [message-bubble msg])]
+;             (when (:streaming? @app-state)
+;                   [:p.has-text-grey "Assistant is typing..."])
+;             [input-box]])}))
 (defn app []
       (r/create-class
        {:component-did-mount start-router!
@@ -98,13 +172,21 @@
         (fn []
             [:div
              [:h1.title "Pyjama GPT"]
-             [:div#chat-box.chat-container
-              {:ref #(reset! scroll-ref %)}
-              (for [[i msg] (map-indexed vector (:messages @app-state))]
-                   ^{:key i} [message-bubble msg])]
-             (when (:streaming? @app-state)
-                   [:p.has-text-grey "Assistant is typing..."])
-             [input-box]])}))
+             [nav-bar]
+             (case (:active-page @app-state)
+                   :chat
+                   [:<>
+                    [:div#chat-box.chat-container
+                     {:ref #(reset! scroll-ref %)}
+                     (for [[i msg] (map-indexed vector (:messages @app-state))]
+                          ^{:key i} [message-bubble msg])]
+                    (when (:streaming? @app-state)
+                          [:p.has-text-grey "Assistant is typing..."])
+                    [input-box]]
+
+                   :settings
+                   [settings-page])])}))
+
 
 ;; --- Mount ---
 (defn ^:export init []

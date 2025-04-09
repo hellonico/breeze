@@ -43,7 +43,6 @@
       (reset! stop-router!
               (sente/start-client-chsk-router! ch-chsk handle-message!)))
 
-;; --- Scroll to bottom on update ---
 (defonce scroll-ref (atom nil))
 (defn scroll-to-bottom! []
       (when-let [el @scroll-ref]
@@ -51,23 +50,7 @@
 
 (add-watch app-state :scroll
            (fn [_ _ _ _] (js/setTimeout scroll-to-bottom! 50)))
-;
-;(defn send-prompt! []
-;      (let [input (:input @app-state)]
-;           (when (not (clojure.string/blank? input))
-;                 ;; Add user message
-;                 (swap! app-state update :messages conj {:role :user :content input})
-;                 ;; Add empty assistant message (we'll fill this as streaming progresses)
-;                 (swap! app-state update :messages conj {:role :assistant :content ""})
-;                 ;; Clear the input field and set the streaming flag
-;                 (swap! app-state assoc :input "" :streaming? true)
-;
-;                 ;; Send the entire list of messages in the chat request
-;                 (chsk-send!
-;                  [:chat/start
-;                   {:url      "http://localhost:11434"
-;                    :model    "llama3.2"
-;                    :messages (:messages @app-state)}]))))
+
 (defn send-prompt! []
       (let [{:keys [url model system-prompt]} (:settings @app-state)
             input (:input @app-state)
@@ -123,8 +106,6 @@
                 :placeholder "Optional system-level prompt for the assistant"
                 :on-change #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
 
-
-;; --- Chat Bubble ---
 (defn message-bubble [{:keys [role content]}]
       [:div {:class (str "message "
                          (case role
@@ -133,7 +114,6 @@
              :style {:align-self (if (= role :user) "flex-end" "flex-start")}}
        content])
 
-;; --- Input Box ---
 (defn input-box []
       (let [streaming? (:streaming? @app-state)]
            [:div.field.has-addons.mt-4
@@ -150,21 +130,6 @@
                                       :disabled streaming?}
               "Send"]]]))
 
-;;; --- Main App Component ---
-;(defn app []
-;      (r/create-class
-;       {:component-did-mount start-router!
-;        :reagent-render
-;        (fn []
-;            [:div
-;             [:h1.title "Pyjama GPT"]
-;             [:div#chat-box.chat-container
-;              {:ref #(reset! scroll-ref %)}
-;              (for [[i msg] (map-indexed vector (:messages @app-state))]
-;                   ^{:key i} [message-bubble msg])]
-;             (when (:streaming? @app-state)
-;                   [:p.has-text-grey "Assistant is typing..."])
-;             [input-box]])}))
 (defn app []
       (r/create-class
        {:component-did-mount start-router!
@@ -187,7 +152,5 @@
                    :settings
                    [settings-page])])}))
 
-
-;; --- Mount ---
 (defn ^:export init []
       (rdom/render [app] (.getElementById js/document "app")))

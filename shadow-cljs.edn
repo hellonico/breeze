@@ -1,0 +1,13 @@
+{:source-paths ["src"]
+ :dependencies [[reagent "1.2.0"]
+                [markdown-to-hiccup "0.6.2"]
+                [com.taoensso/sente "1.20.0"]]
+
+ :dev-http {8000 "public"}
+ :builds {:app {:target :browser
+                :output-dir "public/js"
+                :asset-path "/js"
+                :npm-deps {react "17.0.2"
+                           marked "15.0.6"
+                           react-dom "17.0.2"}
+                :modules {:main {:init-fn myapp.core/init}}}}}

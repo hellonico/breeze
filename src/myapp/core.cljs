@@ -2,8 +2,11 @@
  (:require
   [reagent.core :as r]
   [reagent.dom :as rdom]
+  ["markdown-it" :as MarkdownIt]
   [taoensso.sente :as sente]
   [taoensso.sente.packers.transit :as sente-transit]))
+
+(def md-parser (MarkdownIt.))
 
 ;; --- State ---
 (defonce app-state
@@ -106,13 +109,26 @@
                 :placeholder "Optional system-level prompt for the assistant"
                 :on-change #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
 
+;(defn message-bubble [{:keys [role content]}]
+;      [:div {:class (str "message "
+;                         (case role
+;                               :user "message-user"
+;                               :assistant "message-assistant"))
+;             :style {:align-self (if (= role :user) "flex-end" "flex-start")}}
+;       content
+;       ])
+
 (defn message-bubble [{:keys [role content]}]
-      [:div {:class (str "message "
-                         (case role
-                               :user "message-user"
-                               :assistant "message-assistant"))
-             :style {:align-self (if (= role :user) "flex-end" "flex-start")}}
-       content])
+      (let [html (.render md-parser content)]
+           (r/create-element
+            "div"
+            #js {:className (str "message "
+                                 (case role
+                                       :user "message-user"
+                                       :assistant "message-assistant"))
+                 :style #js {:alignSelf (if (= role :user) "flex-end" "flex-start")}
+                 :dangerouslySetInnerHTML #js {:__html html}})))
+
 
 (defn input-box []
       (let [streaming? (:streaming? @app-state)]

@@ -14,7 +14,6 @@
  (:gen-class))
 
 (defn user-id-fn [ring-req]
- ;; You can generate a random UUID or use session ID
  (get-in ring-req [:session :uid]))
 
 ;; Setup Sente

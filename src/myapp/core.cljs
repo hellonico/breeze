@@ -38,6 +38,10 @@
                  :chat/token (handle-token data)
                  :chat/done (do
                              (swap! app-state assoc :streaming? false)
+                             ;; Update the last assistant message once streaming finishes
+                             (println (:messages @app-state))
+                             ;(swap! app-state update :messages
+                             ;       #(conj (butlast %) {:role :assistant :content (str "Streaming complete!")}))
                              )
                  nil)))
 
@@ -56,20 +60,31 @@
 
 (defn send-prompt! []
       (let [{:keys [url model system-prompt]} (:settings @app-state)
-            input (:input @app-state)
-            base-messages (if (clojure.string/blank? system-prompt)
-                           [{:role :user :content input}]
-                           [{:role :system :content system-prompt}
-                            {:role :user :content input}])]
-           (when (not (clojure.string/blank? input))
-                 (swap! app-state update :messages conj {:role :user :content input})
-                 (swap! app-state update :messages conj {:role :assistant :content ""})
-                 (swap! app-state assoc :input "" :streaming? true)
-                 (chsk-send!
-                  [:chat/start
-                   {:url      url
-                    :model    model
-                    :messages base-messages}]))))
+            input (:input @app-state)]
+           (when-not (clojure.string/blank? input)
+                     ;; Optimistically update UI state first
+                     (swap! app-state update :messages
+                            (fn [msgs] (conj msgs
+                                             {:role :user :content input}
+                                             {:role :assistant :content ""})))
+                     (swap! app-state assoc :input "" :streaming? true)
+
+                     ;; Build message list to send, with optional system prompt
+                     (let [messages (:messages @app-state)
+                           messages-to-send (if (and (<= (count messages) 2) ;; Only user + assistant
+                                                     (not (clojure.string/blank? system-prompt)))
+                                             (into [{:role :system :content system-prompt}] messages)
+                                             messages)]
+                          ;; Send to backend
+                          (chsk-send!
+                           [:chat/start
+                            {:url url
+                             :model model
+                             :messages messages-to-send}])))))
+
+
+(defn clear-chat! []
+      (swap! app-state assoc :messages []))
 
 
 (defn nav-bar []
@@ -109,15 +124,6 @@
                 :placeholder "Optional system-level prompt for the assistant"
                 :on-change #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
 
-;(defn message-bubble [{:keys [role content]}]
-;      [:div {:class (str "message "
-;                         (case role
-;                               :user "message-user"
-;                               :assistant "message-assistant"))
-;             :style {:align-self (if (= role :user) "flex-end" "flex-start")}}
-;       content
-;       ])
-
 (defn message-bubble [{:keys [role content]}]
       (let [html (.render md-parser content)]
            (r/create-element
@@ -144,7 +150,9 @@
             [:div.control
              [:button.button.is-link {:on-click send-prompt!
                                       :disabled streaming?}
-              "Send"]]]))
+              "Send"]
+             [:button.button.is-danger {:on-click clear-chat!} "Clear"]
+             ]]))
 
 (defn app []
       (r/create-class
@@ -163,7 +171,8 @@
                           ^{:key i} [message-bubble msg])]
                     (when (:streaming? @app-state)
                           [:p.has-text-grey "Assistant is typing..."])
-                    [input-box]]
+                    [input-box]
+                    ] ;; Clear chat button
 
                    :settings
                    [settings-page])])}))

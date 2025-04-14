@@ -2,6 +2,8 @@ Realtime ollama client in Clojure/ClojureScript via [Pyjama](http://github.com/h
 ![](./screenshot.png)
 
 
+## Dev
+
 ```bash
 # start front end
 npx shadow-cljs watch app 
@@ -10,4 +12,11 @@ npx shadow-cljs watch app
 clj -M -m myapp.core
 
 # open http://localhost:3000
+```
+
+## Release
+
+```bash
+docker build -t hellonico/breeze .
+docker run -it --rm -p 3000:3000 hellonico/breeze
 ```

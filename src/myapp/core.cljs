@@ -66,7 +66,8 @@
                      (swap! app-state update :messages
                             (fn [msgs] (conj msgs
                                              {:role :user :content input}
-                                             {:role :assistant :content ""})))
+                                             {:role :assistant :content ""}
+                                             )))
                      (swap! app-state assoc :input "" :streaming? true)
 
                      ;; Build message list to send, with optional system prompt

@@ -1,16 +1,17 @@
 (ns myapp.core
  (:require
-  [org.httpkit.server :as httpkit]
+  [clojure.core.async :refer [<! go-loop]]
   [compojure.core :refer [GET POST defroutes]]
   [compojure.route :as route]
-  [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
-  [ring.middleware.params :refer [wrap-params]]
-  [ring.middleware.keyword-params :refer [wrap-keyword-params]]
+  [myapp.storage :refer :all]
+  [org.httpkit.server :as httpkit]
   [pyjama.state :as p]
   [ring.middleware.cors :refer [wrap-cors]]
+  [ring.middleware.defaults :refer [site-defaults wrap-defaults]]
+  [ring.middleware.keyword-params :refer [wrap-keyword-params]]
+  [ring.middleware.params :refer [wrap-params]]
   [taoensso.sente :as sente]
-  [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]]
-  [clojure.core.async :as async :refer [<! >! go-loop]])
+  [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]])
  (:gen-class))
 
 (defn user-id-fn [ring-req]
@@ -20,8 +21,8 @@
 (let [{:keys [ch-recv send-fn connected-uids ajax-post-fn ajax-get-or-ws-handshake-fn]}
       (sente/make-channel-socket-server!
        (get-sch-adapter)
-       {:packer :edn
-        :user-id-fn user-id-fn
+       {:packer        :edn
+        :user-id-fn    user-id-fn
         :csrf-token-fn nil})]
  (def ring-ajax-post ajax-post-fn)
  (def ring-ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn)
@@ -37,10 +38,14 @@
    ;; Wait in background until done, then notify client
    (future
     (loop []
-     (if (:processing @state)
-      (do (Thread/sleep 500) (recur))
-      ;; Processing done, notify client
-      (chsk-send! uid [:chat/done nil])))))))
+     (if (not (:processing @state))
+      (do
+       ;; Processing done, notify client and save
+       (chsk-send! uid [:chat/done nil])
+       (save-chat! uid @state))
+      (do
+       (Thread/sleep 500)
+       (recur))))))))
 
 ;; Message router
 (defn start-router! []
@@ -70,7 +75,7 @@
      wrap-keyword-params
      wrap-user-id
      wrap-params
-     (wrap-cors :access-control-allow-origin [#"http://localhost:3000"])  ; adjust if needed
+     (wrap-cors :access-control-allow-origin [#"http://localhost:3000"]) ; adjust if needed
      (wrap-defaults site-defaults)))
 
 (defonce server (atom nil))

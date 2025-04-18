@@ -37,9 +37,9 @@
                :last-modified (.lastModified f)})))))
 
 (defn get-session-path [filename]
- (let [home (System/getProperty "user.home")]
-  (println filename)
-  (io/file home ".breeze" (str filename ".edn"))))
+ (let [home (System/getProperty "user.home")
+       file (io/file home ".breeze" (str filename ".edn"))]
+  file))
 
 (defn load-session-by-filename [filename]
  (let [file (get-session-path filename)]

@@ -39,10 +39,7 @@
  ;; load session file and send full state to frontend
  (when (= id :sessions/load)
   (when-let [session (load-session-by-filename ?data)]
-   (chsk-send! uid [:sessions/load
-                    (assoc session :active-page :chat
-                                   :streaming? false
-                                   :input "")])))
+   (chsk-send! uid [:sessions/load session])))
 
  (when (= id :chat/start)
   (let [state (atom (assoc ?data :processing true))

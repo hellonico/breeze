@@ -44,29 +44,29 @@
 (defn handle-message! [{:keys [event]}]
       (let [[id data] event]
            (case id
-                 :sessions/list (swap! app-state assoc :sessions data)
+                 :sessions/list
+                 (swap! app-state assoc :sessions data)
 
                  :sessions/load
-                 (let [{:keys [url model system-prompt messages]} data]
-                      (swap! app-state
-                             #(-> %
-                                  (assoc-in [:settings :url] url)
-                                  (assoc-in [:settings :model] model)
-                                  (assoc-in [:settings :system-prompt] system-prompt)
-                                  (assoc :messages messages)
-                                  (assoc :active-page :chat)
-                                  (assoc :input "")
-                                  (assoc :streaming? false))))
+                 (let [raw-messages (:messages data)
+                       filtered-messages (filter #(not (clojure.string/blank? (:content %))) raw-messages)
+                       system-msg (some #(when (= (:role %) :system) %) filtered-messages)
+                       user-messages (remove #(= (:role %) :system) filtered-messages)]
+                      (swap! app-state assoc
+                             :messages user-messages
+                             :settings (-> (:settings @app-state)
+                                           (assoc :system-prompt (:content system-msg)))
+                             :active-page :chat
+                             :streaming? false
+                             :input ""))
 
-                 :chat/token (handle-token data)
 
-                 :chat/done (do
-                             (swap! app-state assoc :streaming? false)
-                             ;; Update the last assistant message once streaming finishes
-                             (println (:messages @app-state))
-                             ;(swap! app-state update :messages
-                             ;       #(conj (butlast %) {:role :assistant :content (str "Streaming complete!")}))
-                             )
+                 :chat/token
+                 (handle-token data)
+
+                 :chat/done
+                 (swap! app-state assoc :streaming? false)
+
                  nil)))
 
 (defonce stop-router! (atom nil))

@@ -10,9 +10,9 @@
         compojure/compojure {:mvn/version "1.7.0"}
         com.taoensso/sente {:mvn/version "1.20.0"}
         ;; Add your own project
-        ;hellonico/pyjama {:git/url "https://github.com/hellonico/pyjama.git"
-        ;                  :sha "46bc551f465bd22460ea7986258a3a65822c3b0c"}
-        pyjama/pyjama {:local/root "../pyjama"}
+        hellonico/pyjama {:git/url "https://github.com/hellonico/pyjama.git"
+                          :sha "d609f6fafcd7d99ecace79246bc7cd5c5a56066f"}
+        ;pyjama/pyjama {:local/root "../pyjama"}
  } ; adjust if needed
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}}

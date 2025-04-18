@@ -13,10 +13,13 @@
          (r/atom {:input ""
                   :messages []
                   :streaming? false
-                  :active-page :chat ;; <- New
+                  :active-page :chat
                   :settings {:url "http://localhost:11434"
                              :model "llama3.2"
-                             :system-prompt ""}}))
+                             :system-prompt ""}
+                  :sessions {}         ;; loaded session list from backend
+                  :selected-session "" ;; filename of selected session
+                  }))
 
 ;; --- WebSocket Setup ---
 (let [{:keys [ch-recv send-fn state] :as chsk}
@@ -29,13 +32,34 @@
      (def ch-chsk ch-recv)
      (def chsk-state state))
 
+(defn load-session! [filename]
+      (chsk-send! [:sessions/load filename]))
+
+(defn fetch-sessions! []
+      (chsk-send! [:sessions/request nil]))
+
 (defn handle-token [token]
       (swap! app-state update-in [:messages (dec (count (:messages @app-state))) :content] str token))
 
 (defn handle-message! [{:keys [event]}]
       (let [[id data] event]
            (case id
+                 :sessions/list (swap! app-state assoc :sessions data)
+
+                 :sessions/load
+                 (let [{:keys [url model system-prompt messages]} data]
+                      (swap! app-state
+                             #(-> %
+                                  (assoc-in [:settings :url] url)
+                                  (assoc-in [:settings :model] model)
+                                  (assoc-in [:settings :system-prompt] system-prompt)
+                                  (assoc :messages messages)
+                                  (assoc :active-page :chat)
+                                  (assoc :input "")
+                                  (assoc :streaming? false))))
+
                  :chat/token (handle-token data)
+
                  :chat/done (do
                              (swap! app-state assoc :streaming? false)
                              ;; Update the last assistant message once streaming finishes
@@ -87,15 +111,32 @@
 (defn clear-chat! []
       (swap! app-state assoc :messages []))
 
-
 (defn nav-bar []
-      [:div.buttons
-       [:button.button.is-link
-        {:on-click #(swap! app-state assoc :active-page :chat)}
-        "Chat"]
-       [:button.button.is-link.is-light
-        {:on-click #(swap! app-state assoc :active-page :settings)}
-        "Settings"]])
+      [:div.tabs.is-toggle
+       [:ul
+        [:li {:class (when (= :chat (:active-page @app-state)) "is-active")}
+         [:a {:on-click #(swap! app-state assoc :active-page :chat)} "Chat"]]
+        [:li {:class (when (= :settings (:active-page @app-state)) "is-active")}
+         [:a {:on-click #(swap! app-state assoc :active-page :settings)} "Settings"]]
+        [:li {:class (when (= :sessions (:active-page @app-state)) "is-active")}
+         [:a {:on-click #(do
+                          (swap! app-state assoc :active-page :sessions)
+                          (fetch-sessions!))} "Sessions"]]]])
+
+(defn sessions-page []
+      [:div.container
+       [:h2.title "Saved Sessions"]
+       [:div.sessions-table
+        [:table.table.is-fullwidth.is-hoverable
+         [:thead
+          [:tr [:th "Session"]]]
+         [:tbody
+          (for [{:keys [filename last-modified]} (:sessions @app-state)]
+               ^{:key filename}
+               [:tr {:on-double-click #(do (load-session! filename))}
+                [:td (clojure.string/replace filename "_" " ")]
+                [:td (.toLocaleString (js/Date. last-modified))]])]]]])
+
 
 (defn settings-page []
       (let [{:keys [url model system-prompt]} (:settings @app-state)]
@@ -164,6 +205,7 @@
              [:h1.title "Pyjama GPT"]
              [nav-bar]
              (case (:active-page @app-state)
+
                    :chat
                    [:<>
                     [:div#chat-box.chat-container
@@ -174,6 +216,8 @@
                           [:p.has-text-grey "Assistant is typing..."])
                     [input-box]
                     ] ;; Clear chat button
+
+                   :sessions [sessions-page]
 
                    :settings
                    [settings-page])])}))

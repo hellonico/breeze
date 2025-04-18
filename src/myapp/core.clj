@@ -31,6 +31,19 @@
  (def connected-uids connected-uids))
 
 (defn handle-msg! [{:keys [id ?data uid]}]
+
+ ;; send all session metadata
+ (when (= id :sessions/request)
+  (chsk-send! uid [:sessions/list (load-saved-sessions)]))
+
+ ;; load session file and send full state to frontend
+ (when (= id :sessions/load)
+  (when-let [session (load-session-by-filename ?data)]
+   (chsk-send! uid [:sessions/load
+                    (assoc session :active-page :chat
+                                   :streaming? false
+                                   :input "")])))
+
  (when (= id :chat/start)
   (let [state (atom (assoc ?data :processing true))
         client-chan (fn [_ text] (chsk-send! uid [:chat/token text]))]

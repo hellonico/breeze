@@ -49,9 +49,15 @@
 
                  :sessions/load
                  (let [raw-messages (:messages data)
-                       filtered-messages (filter #(not (clojure.string/blank? (:content %))) raw-messages)
+                       ;_ (println raw-messages)
+                       filtered-messages (remove #(clojure.string/blank? (:content %)) raw-messages)
+                       ;filtered-messages raw-messages
+                       ;_ (println filtered-messages)
                        system-msg (some #(when (= (:role %) :system) %) filtered-messages)
-                       user-messages (remove #(= (:role %) :system) filtered-messages)]
+                       user-messages (remove #(= (:role %) :system) filtered-messages)
+                       _ (println user-messages)
+                       ]
+
                       (swap! app-state assoc
                              :messages user-messages
                              :settings (-> (:settings @app-state)
@@ -88,10 +94,9 @@
            (when-not (clojure.string/blank? input)
                      ;; Optimistically update UI state first
                      (swap! app-state update :messages
-                            (fn [msgs] (conj msgs
-                                             {:role :user :content input}
-                                             {:role :assistant :content ""}
-                                             )))
+                            (fn [msgs] (into (vec msgs)
+                                             [{:role :user :content input}
+                                              {:role :assistant :content ""}])))
                      (swap! app-state assoc :input "" :streaming? true)
 
                      ;; Build message list to send, with optional system prompt

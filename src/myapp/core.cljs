@@ -10,15 +10,16 @@
 
 ;; --- State ---
 (defonce app-state
-         (r/atom {:input ""
-                  :messages []
-                  :streaming? false
-                  :active-page :chat
-                  :settings {:url "http://localhost:11434"
-                             :model "llama3.2"
-                             :system-prompt ""}
-                  :sessions {}         ;; loaded session list from backend
-                  :selected-session "" ;; filename of selected session
+         (r/atom {:input            ""
+                  :messages         []
+                  :streaming?       false
+                  :active-page      :chat
+                  :models           []
+                  :settings         {:url           "http://localhost:11434"
+                                     :model         "llama3.2"
+                                     :system-prompt ""}
+                  :sessions         {}                      ;; loaded session list from backend
+                  :selected-session ""                      ;; filename of selected session
                   }))
 
 ;; --- WebSocket Setup ---
@@ -44,18 +45,17 @@
 (defn handle-message! [{:keys [event]}]
       (let [[id data] event]
            (case id
+                 :models/list-result
+                 (swap! app-state assoc :models data)
+
                  :sessions/list
                  (swap! app-state assoc :sessions data)
 
                  :sessions/load
                  (let [raw-messages (:messages data)
-                       ;_ (println raw-messages)
                        filtered-messages (remove #(clojure.string/blank? (:content %)) raw-messages)
-                       ;filtered-messages raw-messages
-                       ;_ (println filtered-messages)
                        system-msg (some #(when (= (:role %) :system) %) filtered-messages)
                        user-messages (remove #(= (:role %) :system) filtered-messages)
-                       _ (println user-messages)
                        ]
 
                       (swap! app-state assoc
@@ -108,13 +108,17 @@
                           ;; Send to backend
                           (chsk-send!
                            [:chat/start
-                            {:url url
-                             :model model
+                            {:url      url
+                             :model    model
                              :messages messages-to-send}])))))
 
 
 (defn clear-chat! []
       (swap! app-state assoc :messages []))
+
+(defn load-models []
+      (let [url (get-in @app-state [:settings :url])]
+           (chsk-send! [:models/list {:url url}])))
 
 (defn nav-bar []
       [:div.tabs.is-toggle
@@ -122,7 +126,10 @@
         [:li {:class (when (= :chat (:active-page @app-state)) "is-active")}
          [:a {:on-click #(swap! app-state assoc :active-page :chat)} "Chat"]]
         [:li {:class (when (= :settings (:active-page @app-state)) "is-active")}
-         [:a {:on-click #(swap! app-state assoc :active-page :settings)} "Settings"]]
+         [:a {:on-click #((swap! app-state assoc :active-page :settings)
+                          (load-models)
+                          )} "Settings"]]
+
         [:li {:class (when (= :sessions (:active-page @app-state)) "is-active")}
          [:a {:on-click #(do
                           (swap! app-state assoc :active-page :sessions)
@@ -134,7 +141,9 @@
        [:div.sessions-table
         [:table.table.is-fullwidth.is-hoverable
          [:thead
-          [:tr [:th "Session"]]]
+          [:tr
+           [:th "Session"]
+           [:th "Date"]]]
          [:tbody
           (for [{:keys [filename last-modified]} (:sessions @app-state)]
                ^{:key filename}
@@ -144,62 +153,87 @@
 
 
 (defn settings-page []
-      (let [{:keys [url model system-prompt]} (:settings @app-state)]
+      (let [models (:models @app-state)
+            {:keys [url model system-prompt]} (:settings @app-state)]
            [:div
             [:h2.title "Settings"]
             [:div.field
              [:label.label "API URL"]
              [:div.control
               [:input.input
-               {:type "text"
-                :value url
-                :on-change #(swap! app-state assoc-in [:settings :url] (.. % -target -value))}]]]
-
+               {:type      "text"
+                :value     url
+                :on-change #(when-let [url (.. % -target -value)] (swap! app-state assoc-in [:settings :url] url) (load-models))}]]]
             [:div.field
              [:label.label "Model"]
              [:div.control
-              [:input.input
-               {:type "text"
-                :value model
-                :on-change #(swap! app-state assoc-in [:settings :model] (.. % -target -value))}]]]
+              [:select.select
+               {:value     model
+                :on-change #(swap! app-state assoc-in [:settings :model] (.. % -target -value))}
+               (for [model models]
+                    ^{:key model}
+                    [:option model])]]]
 
             [:div.field
              [:label.label "System Prompt"]
              [:div.control
               [:textarea.textarea
-               {:value system-prompt
+               {:value       system-prompt
                 :placeholder "Optional system-level prompt for the assistant"
-                :on-change #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
+                :on-change   #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
 
 (defn message-bubble [{:keys [role content]}]
       (let [html (.render md-parser content)]
            (r/create-element
             "div"
-            #js {:className (str "message "
-                                 (case role
-                                       :user "message-user"
-                                       :assistant "message-assistant"))
-                 :style #js {:alignSelf (if (= role :user) "flex-end" "flex-start")}
+            #js {:className               (str "message "
+                                               (case role
+                                                     :user "message-user"
+                                                     :assistant "message-assistant"))
+                 :style                   #js {:alignSelf (if (= role :user) "flex-end" "flex-start")}
                  :dangerouslySetInnerHTML #js {:__html html}})))
 
-
 (defn input-box []
-      (let [streaming? (:streaming? @app-state)]
-           [:div.field.has-addons.mt-4
-            [:div.control.is-expanded
-             [:input.input {:type        "text"
-                            :placeholder "Type a message..."
-                            :value       (:input @app-state)
-                            :on-change   #(swap! app-state assoc :input (-> % .-target .-value))
-                            :on-key-down #(when (and (= (.-key %) "Enter") (not streaming?))
-                                                (send-prompt!))
-                            :disabled    streaming?}]]
-            [:div.control
-             [:button.button.is-link {:on-click send-prompt!
-                                      :disabled streaming?}
-              "Send"]
-             [:button.button.is-danger {:on-click clear-chat!} "Clear"]
-             ]]))
+      (let [value (:input @app-state)
+            streaming? (:streaming? @app-state)]
+           [:div.input-container
+            {:style {:position "relative"}}
+            [:div.input-wrapper
+             {:style {:display "flex"
+                      :flex-direction "column"
+                      :position "relative"}
+              :on-mouse-enter #(swap! app-state assoc :show-buttons? true)
+              :on-mouse-leave #(swap! app-state assoc :show-buttons? false)}
+             [:textarea.textarea
+              {:placeholder "Type a message..."
+               :value value
+               :rows 1
+               :style {:resize "none"
+                       :overflow "hidden"
+                       :min-height "2.5em"
+                       :max-height "20em"}
+               :on-change #(let [new-val (.. % -target -value)]
+                                (swap! app-state assoc :input new-val)
+                                (let [el (.. % -target)]
+                                     (set! (.-style.height el) "auto")
+                                     (set! (.-style.height el) (str (.-scrollHeight el) "px"))))
+               :on-key-down
+               (fn [e]
+                   (let [enter? (= "Enter" (.-key e))
+                         shift? (.-shiftKey e)]
+                        (when (and enter? shift?)
+                              (.preventDefault e)
+                              (send-prompt!))))}]
+             (when (:show-buttons? @app-state)
+                   [:div.buttons-container
+                    {:style {:margin-top "0.3em"
+                             :display "flex"
+                             :gap "0.5em"}}
+                    [:button.button.is-link {:on-click send-prompt!
+                                             :disabled streaming?}
+                     "Send"]
+                    [:button.button.is-danger {:on-click clear-chat!} "Clear"]])]]))
+
 
 (defn app []
       (r/create-class
@@ -220,7 +254,7 @@
                     (when (:streaming? @app-state)
                           [:p.has-text-grey "Assistant is typing..."])
                     [input-box]
-                    ] ;; Clear chat button
+                    ]                                       ;; Clear chat button
 
                    :sessions [sessions-page]
 

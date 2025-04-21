@@ -11,7 +11,6 @@
      (subs 0 (min 40 (count s)))))                          ;; Limit to 40 chars
 
 (defn save-chat! [session-id state]
- ;(println "saved")
  (when-let [user-message (some #(when (= (:role %) :user) (:content %)) (:messages state))]
   (let [filename (str (sanitize-filename user-message) ".edn")
         home (System/getProperty "user.home")

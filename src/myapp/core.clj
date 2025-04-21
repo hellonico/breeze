@@ -5,6 +5,7 @@
   [compojure.route :as route]
   [myapp.storage :refer :all]
   [org.httpkit.server :as httpkit]
+  [pyjama.core]
   [pyjama.state :as p]
   [ring.middleware.cors :refer [wrap-cors]]
   [ring.middleware.defaults :refer [site-defaults wrap-defaults]]
@@ -16,6 +17,7 @@
 
 (defn user-id-fn [ring-req]
  (get-in ring-req [:session :uid]))
+
 
 ;; Setup Sente
 (let [{:keys [ch-recv send-fn connected-uids ajax-post-fn ajax-get-or-ws-handshake-fn]}
@@ -40,6 +42,18 @@
  (when (= id :sessions/load)
   (when-let [session (load-session-by-filename ?data)]
    (chsk-send! uid [:sessions/load session])))
+
+ (when (= id :models/list)
+  (when-let [url (:url ?data)]
+   (println "list models" url)
+   (try
+   (pyjama.core/ollama
+    url :tags {}
+    (fn [res]
+     (let [models (map :name (:models res))]
+      (chsk-send! uid [:models/list-result models]))))
+   (catch Exception e
+    (chsk-send! uid [:models/list-result []])))))
 
  (when (= id :chat/start)
   (let [state (atom (assoc ?data :processing true))

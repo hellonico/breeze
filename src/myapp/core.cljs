@@ -6,7 +6,7 @@
   [taoensso.sente :as sente]
   [taoensso.sente.packers.transit :as sente-transit]))
 
-(def md-parser (MarkdownIt.))
+(def md-parser (MarkdownIt. #js {:breaks true}))
 
 ;; --- State ---
 (defonce app-state
@@ -16,10 +16,10 @@
                   :active-page      :chat
                   :models           []
                   :settings         {:url           "http://localhost:11434"
-                                     :model         "llama3.2"
+                                     :model         "llama3.2:latest"
                                      :system-prompt ""}
-                  :sessions         {}                      ;; loaded session list from backend
-                  :selected-session ""                      ;; filename of selected session
+                  :sessions         {}
+                  :selected-session ""
                   }))
 
 ;; --- WebSocket Setup ---
@@ -61,6 +61,7 @@
                       (swap! app-state assoc
                              :messages user-messages
                              :settings (-> (:settings @app-state)
+                                           (assoc :model (:model data))
                                            (assoc :system-prompt (:content system-msg)))
                              :active-page :chat
                              :streaming? false
@@ -164,15 +165,16 @@
                {:type      "text"
                 :value     url
                 :on-change #(when-let [url (.. % -target -value)] (swap! app-state assoc-in [:settings :url] url) (load-models))}]]]
+
             [:div.field
              [:label.label "Model"]
              [:div.control
               [:select.select
                {:value     model
                 :on-change #(swap! app-state assoc-in [:settings :model] (.. % -target -value))}
-               (for [model models]
-                    ^{:key model}
-                    [:option model])]]]
+               (for [m models]
+                    ^{:key m}
+                    [:option {:value m} m])]]]
 
             [:div.field
              [:label.label "System Prompt"]
@@ -182,16 +184,56 @@
                 :placeholder "Optional system-level prompt for the assistant"
                 :on-change   #(swap! app-state assoc-in [:settings :system-prompt] (.. % -target -value))}]]]]))
 
-(defn message-bubble [{:keys [role content]}]
-      (let [html (.render md-parser content)]
-           (r/create-element
-            "div"
-            #js {:className               (str "message "
-                                               (case role
-                                                     :user "message-user"
-                                                     :assistant "message-assistant"))
-                 :style                   #js {:alignSelf (if (= role :user) "flex-end" "flex-start")}
-                 :dangerouslySetInnerHTML #js {:__html html}})))
+
+
+(defn message-bubble [{:keys [role content]} index]
+      (let [hovered? (r/atom false)
+            copy-to-clipboard #(js/navigator.clipboard.writeText content)
+            delete-from-here #(swap! app-state update :messages
+                                     (fn [msgs]
+                                         (vec (subvec (vec msgs) 0 index))))]
+           (fn [{:keys [role content index]}]
+               (let [html (.render md-parser content)]
+                    [:div.message-wrapper
+                     {:on-mouse-enter #(reset! hovered? true)
+                      :on-mouse-leave #(reset! hovered? false)
+                      :style {:display "flex"
+                              :flex-direction "column"
+                              :align-items (if (= role :user) "flex-end" "flex-start")
+                              :position "relative"}}
+
+                     ;; Copy + Delete icons
+                     (when @hovered?
+                           [:div
+                            {:style {:position "absolute"
+                                     :top "4px"
+                                     :right "8px"
+                                     :display "flex"
+                                     :gap "0.5em"
+                                     :font-size "0.8em"
+                                     :cursor "pointer"}}
+                            [:span
+                             {:on-click copy-to-clipboard
+                              :title "Copy to clipboard"}
+                             "📋"]
+                            [:span
+                             {:on-click delete-from-here
+                              :title "Delete from here"}
+                             "🗑"]])
+
+                     ;; Message bubble
+                     (r/create-element
+                      "div"
+                      #js {:className (str "message "
+                                           (case role
+                                                 :user "message-user"
+                                                 :assistant "message-assistant"))
+                           :style #js {:maxWidth "100%"
+                                       :whiteSpace "pre-wrap"
+                                       :alignSelf (if (= role :user) "flex-end" "flex-start")}
+                           :dangerouslySetInnerHTML #js {:__html html}})]))))
+
+
 
 (defn input-box []
       (let [value (:input @app-state)
@@ -199,24 +241,31 @@
            [:div.input-container
             {:style {:position "relative"}}
             [:div.input-wrapper
-             {:style {:display "flex"
-                      :flex-direction "column"
-                      :position "relative"}
+             {:style          {:display        "flex"
+                               :flex-direction "column"
+                               :position       "relative"}
               :on-mouse-enter #(swap! app-state assoc :show-buttons? true)
               :on-mouse-leave #(swap! app-state assoc :show-buttons? false)}
              [:textarea.textarea
               {:placeholder "Type a message..."
-               :value value
-               :rows 1
-               :style {:resize "none"
-                       :overflow "hidden"
-                       :min-height "2.5em"
-                       :max-height "20em"}
-               :on-change #(let [new-val (.. % -target -value)]
-                                (swap! app-state assoc :input new-val)
-                                (let [el (.. % -target)]
-                                     (set! (.-style.height el) "auto")
-                                     (set! (.-style.height el) (str (.-scrollHeight el) "px"))))
+               :value       value
+               :rows        1
+               :style       {:resize     "none"
+                             :overflow   "hidden"
+                             :min-height "2.5em"
+                             :max-height "20em"}
+               :on-change   #(let [new-val (.. % -target -value)]
+                                  (swap! app-state assoc :input new-val)
+                                  (let [el (.-target %)
+                                        style (.-style el)
+                                        scroll-height (.-scrollHeight el)]
+                                       (set! (.-height style) (str scroll-height "px"))
+                                       (set! (.-height style) "auto"))
+
+                                  ;(let [el (.. % -target)]
+                                  ;     (set! (.-style.height el) "auto")
+                                  ;     (set! (.-style.height el) (str (.-scrollHeight el) "px")))
+                                  )
                :on-key-down
                (fn [e]
                    (let [enter? (= "Enter" (.-key e))
@@ -227,8 +276,8 @@
              (when (:show-buttons? @app-state)
                    [:div.buttons-container
                     {:style {:margin-top "0.3em"
-                             :display "flex"
-                             :gap "0.5em"}}
+                             :display    "flex"
+                             :gap        "0.5em"}}
                     [:button.button.is-link {:on-click send-prompt!
                                              :disabled streaming?}
                      "Send"]
@@ -250,7 +299,7 @@
                     [:div#chat-box.chat-container
                      {:ref #(reset! scroll-ref %)}
                      (for [[i msg] (map-indexed vector (:messages @app-state))]
-                          ^{:key i} [message-bubble msg])]
+                          ^{:key i} [message-bubble msg i])]
                     (when (:streaming? @app-state)
                           [:p.has-text-grey "Assistant is typing..."])
                     [input-box]

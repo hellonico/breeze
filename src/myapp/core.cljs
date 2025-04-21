@@ -188,12 +188,13 @@
 
 (defn message-bubble [{:keys [role content]} index]
       (let [hovered? (r/atom false)
-            copy-to-clipboard #(js/navigator.clipboard.writeText content)
             delete-from-here #(swap! app-state update :messages
                                      (fn [msgs]
                                          (vec (subvec (vec msgs) 0 index))))]
            (fn [{:keys [role content index]}]
-               (let [html (.render md-parser content)]
+               (let [html (.render md-parser content)
+                     copy-to-clipboard #(js/navigator.clipboard.writeText (if (= role :user) content html))
+                     ]
                     [:div.message-wrapper
                      {:on-mouse-enter #(reset! hovered? true)
                       :on-mouse-leave #(reset! hovered? false)
@@ -229,7 +230,6 @@
                                                  :user "message-user"
                                                  :assistant "message-assistant"))
                            :style #js {:maxWidth "100%"
-                                       :whiteSpace "pre-wrap"
                                        :alignSelf (if (= role :user) "flex-end" "flex-start")}
                            :dangerouslySetInnerHTML #js {:__html html}})]))))
 

@@ -48,7 +48,6 @@
 
  (when (= id :models/list)
   (when-let [url (:url ?data)]
-   (println "list models" url)
    (try
     (pyjama.core/ollama
      url :tags {}

@@ -9,10 +9,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs
 
 # Install Clojure CLI
-RUN curl -O https://download.clojure.org/install/linux-install-1.11.1.1273.sh && \
-    chmod +x linux-install-1.11.1.1273.sh && \
-    ./linux-install-1.11.1.1273.sh && \
-    rm linux-install-1.11.1.1273.sh
+RUN curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh && \
+    chmod +x linux-install.sh && \
+    ./linux-install.sh && \
+    rm linux-install.sh
 
 WORKDIR /app
 

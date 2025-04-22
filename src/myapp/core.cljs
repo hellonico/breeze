@@ -136,6 +136,11 @@
                           (swap! app-state assoc :active-page :sessions)
                           (fetch-sessions!))} "Sessions"]]]])
 
+(defn remove-session [filename]
+  (when (js/confirm (str "Delete session '" filename "'?"))
+      (chsk-send! [:sessions/remove filename])
+      (swap! app-state update :sessions (fn[sessions] (remove #(= (:filename %) filename) sessions)))))
+
 (defn sessions-page []
       [:div.container
        [:h2.title "Saved Sessions"]
@@ -144,13 +149,21 @@
          [:thead
           [:tr
            [:th "Session"]
-           [:th "Date"]]]
+           [:th "Model"]
+           [:th "Date"]
+           [:th ""]]]
          [:tbody
-          (for [{:keys [filename last-modified]} (:sessions @app-state)]
+          (for [{:keys [filename last-modified model]} (:sessions @app-state)]
                ^{:key filename}
                [:tr {:on-double-click #(do (load-session! filename))}
                 [:td (clojure.string/replace filename "_" " ")]
-                [:td (.toLocaleString (js/Date. last-modified))]])]]]])
+                [:td (str model)]
+                [:td (.toLocaleString (js/Date. last-modified))]
+                [:td [:button.button.is-danger.is-small
+                      {:on-click #(remove-session filename)}
+                      [:span.icon
+                       [:i.fas.fa-trash]]]]])
+          ]]]])
 
 
 (defn settings-page []
@@ -198,39 +211,39 @@
                     [:div.message-wrapper
                      {:on-mouse-enter #(reset! hovered? true)
                       :on-mouse-leave #(reset! hovered? false)
-                      :style {:display "flex"
-                              :flex-direction "column"
-                              :align-items (if (= role :user) "flex-end" "flex-start")
-                              :position "relative"}}
+                      :style          {:display        "flex"
+                                       :flex-direction "column"
+                                       :align-items    (if (= role :user) "flex-end" "flex-start")
+                                       :position       "relative"}}
 
                      ;; Copy + Delete icons
                      (when @hovered?
                            [:div
-                            {:style {:position "absolute"
-                                     :top "4px"
-                                     :right "8px"
-                                     :display "flex"
-                                     :gap "0.5em"
+                            {:style {:position  "absolute"
+                                     :top       "4px"
+                                     :right     "8px"
+                                     :display   "flex"
+                                     :gap       "0.5em"
                                      :font-size "0.8em"
-                                     :cursor "pointer"}}
+                                     :cursor    "pointer"}}
                             [:span
                              {:on-click copy-to-clipboard
-                              :title "Copy to clipboard"}
+                              :title    "Copy to clipboard"}
                              "📋"]
                             [:span
                              {:on-click delete-from-here
-                              :title "Delete from here"}
+                              :title    "Delete from here"}
                              "🗑"]])
 
                      ;; Message bubble
                      (r/create-element
                       "div"
-                      #js {:className (str "message "
-                                           (case role
-                                                 :user "message-user"
-                                                 :assistant "message-assistant"))
-                           :style #js {:maxWidth "100%"
-                                       :alignSelf (if (= role :user) "flex-end" "flex-start")}
+                      #js {:className               (str "message "
+                                                         (case role
+                                                               :user "message-user"
+                                                               :assistant "message-assistant"))
+                           :style                   #js {:maxWidth  "100%"
+                                                         :alignSelf (if (= role :user) "flex-end" "flex-start")}
                            :dangerouslySetInnerHTML #js {:__html html}})]))))
 
 

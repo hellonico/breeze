@@ -34,6 +34,9 @@
 
 (defn handle-msg! [{:keys [id ?data uid]}]
 
+ (when (= id :sessions/remove)
+  (remove-session ?data))
+
  ;; send all session metadata
  (when (= id :sessions/request)
   (chsk-send! uid [:sessions/list (load-saved-sessions)]))
@@ -47,13 +50,13 @@
   (when-let [url (:url ?data)]
    (println "list models" url)
    (try
-   (pyjama.core/ollama
-    url :tags {}
-    (fn [res]
-     (let [models (map :name (:models res))]
-      (chsk-send! uid [:models/list-result models]))))
-   (catch Exception e
-    (chsk-send! uid [:models/list-result []])))))
+    (pyjama.core/ollama
+     url :tags {}
+     (fn [res]
+      (let [models (map :name (:models res))]
+       (chsk-send! uid [:models/list-result models]))))
+    (catch Exception e
+     (chsk-send! uid [:models/list-result []])))))
 
  (when (= id :chat/start)
   (let [state (atom (assoc ?data :processing true))

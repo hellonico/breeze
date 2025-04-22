@@ -25,6 +25,24 @@
 (defn get-breeze-dir []
  (str (System/getProperty "user.home") "/.breeze"))
 
+; TODO duplicates
+(defn get-session-path [filename]
+ (let [home (System/getProperty "user.home")
+       file (io/file home ".breeze" (str filename ".edn"))]
+  file))
+
+(defn- load-session-content [file]
+ (with-open [r (io/reader file)]
+  (edn/read (PushbackReader. r))))
+
+(defn load-session-by-filename [filename]
+ (let [file (get-session-path filename)]
+  (when (.exists file)
+   (load-session-content file))))
+(defn remove-session[filename]
+ (println "delete " filename)
+ (.delete (get-session-path filename)))
+
 (defn load-saved-sessions []
  (let [dir (io/as-file (get-breeze-dir))]
   (->> (.listFiles dir)
@@ -33,15 +51,6 @@
        (sort-by #(.lastModified %) >)
        (mapv (fn [f]
               {:filename      (subs (.getName f) 0 (- (count (.getName f)) 4))
+               ; a bit heavy
+               :model (:model (load-session-content f))
                :last-modified (.lastModified f)})))))
-
-(defn get-session-path [filename]
- (let [home (System/getProperty "user.home")
-       file (io/file home ".breeze" (str filename ".edn"))]
-  file))
-
-(defn load-session-by-filename [filename]
- (let [file (get-session-path filename)]
-  (when (.exists file)
-   (with-open [r (io/reader file)]
-    (edn/read (PushbackReader. r))))))

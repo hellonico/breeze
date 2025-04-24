@@ -328,14 +328,16 @@
  [:div.chat-split
   {:style {:display "flex" :height "100%"}}
 
+
   ;; Left: user messages
   [:div.left-pane
    {:style {:width "30%" :overflow "auto"
             :padding "1em" :borderRight "1px solid #ccc"}}
-   (for [{:keys [role] :as msg} messages
+   [input-box]
+   (for [{:keys [role] :as msg} (reverse messages)
          :when (= role :user)]
     ^{:key (hash msg)} [message-bubble msg])
-   [input-box]
+
    ]
 
   ;; Right: assistant messages
@@ -343,7 +345,7 @@
    {:style {:flex "1" :overflow "auto" :padding "1em"}}
    (when (:streaming? @app-state)
     [:p.has-text-grey "Assistant is typing..."])
-   (for [{:keys [role] :as msg} messages
+   (for [{:keys [role] :as msg} (reverse messages)
          :when (= role :assistant)]
     ^{:key (hash msg)} [message-bubble msg])]]))
 
@@ -354,19 +356,25 @@
   [:div.chat-split
    {:style {:display "flex" :height "100%"}}
 
+
    ;; Left: latest user message + input
    [:div.left-pane
     {:style {:width "30%" :overflow "auto"
              :padding "1em" :borderRight "1px solid #ccc"
              :display "flex" :flexDirection "column"}}
+    [input-box]
+
     (when last-user
      [message-bubble last-user])
     ;; You’ll want your normal input/send/clear bar here:
-    [input-box]]
+    ]
 
    ;; Right: latest assistant message
    [:div.right-pane
     {:style {:flex "1" :overflow "auto" :padding "1em"}}
+    (when (:streaming? @app-state)
+     [:p.has-text-grey "Assistant is typing..."])
+
     (when last-assistant
      [message-bubble last-assistant])]]))
 

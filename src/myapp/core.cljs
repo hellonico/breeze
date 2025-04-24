@@ -17,6 +17,7 @@
                   :models           []
                   :settings         {:url           "http://localhost:11434"
                                      :model         "llama3.2:latest"
+                                     :layout :chat-bubbles
                                      :system-prompt ""}
                   :sessions         {}
                   :selected-session ""
@@ -66,7 +67,6 @@
                              :active-page :chat
                              :streaming? false
                              :input ""))
-
 
                  :chat/token
                  (handle-token data)
@@ -171,6 +171,19 @@
             {:keys [url model system-prompt]} (:settings @app-state)]
            [:div
             [:h2.title "Settings"]
+
+            [:div.field
+             [:label.label "Layout"]
+             [:div.control
+              [:div.select
+               [:select
+                {:value     (name (:layout (:settings @app-state)))
+                 :on-change #(swap! app-state assoc-in [:settings :layout]
+                                    (keyword (.. % -target -value)))}
+                [:option {:value "chat-bubbles"} "Chat bubbles"]
+                [:option {:value "left-right"} "Left/Right (All Messages)"]
+                [:option {:value "last-message"} "Left/Right (Last Message Only)"]]]]]
+
             [:div.field
              [:label.label "API URL"]
              [:div.control
@@ -178,6 +191,7 @@
                {:type      "text"
                 :value     url
                 :on-change #(when-let [url (.. % -target -value)] (swap! app-state assoc-in [:settings :url] url) (load-models))}]]]
+
 
             [:div.field
              [:label.label "Model"]
@@ -296,6 +310,65 @@
                      "Send"]
                     [:button.button.is-danger {:on-click clear-chat!} "Clear"]])]]))
 
+(defn render-bubble-layout[]
+ [:<>
+  [:div#chat-box.chat-container
+   {:ref #(reset! scroll-ref %)}
+   (for [[i msg] (map-indexed vector (:messages @app-state))]
+    ^{:key i} [message-bubble msg i])]
+  (when (:streaming? @app-state)
+   [:p.has-text-grey "Assistant is typing..."])
+  [input-box]
+  ]                                       ;; Clear chat button
+
+ )
+
+(defn render-left-right-layout []
+ (let [messages (:messages @app-state)]
+ [:div.chat-split
+  {:style {:display "flex" :height "100%"}}
+
+  ;; Left: user messages
+  [:div.left-pane
+   {:style {:width "30%" :overflow "auto"
+            :padding "1em" :borderRight "1px solid #ccc"}}
+   (for [{:keys [role] :as msg} messages
+         :when (= role :user)]
+    ^{:key (hash msg)} [message-bubble msg])
+   [input-box]
+   ]
+
+  ;; Right: assistant messages
+  [:div.right-pane
+   {:style {:flex "1" :overflow "auto" :padding "1em"}}
+   (when (:streaming? @app-state)
+    [:p.has-text-grey "Assistant is typing..."])
+   (for [{:keys [role] :as msg} messages
+         :when (= role :assistant)]
+    ^{:key (hash msg)} [message-bubble msg])]]))
+
+(defn render-last-message-layout []
+ (let [messages (:messages @app-state)
+       last-user      (last (filter #(= (:role %) :user) messages))
+       last-assistant (last (filter #(= (:role %) :assistant) messages))]
+  [:div.chat-split
+   {:style {:display "flex" :height "100%"}}
+
+   ;; Left: latest user message + input
+   [:div.left-pane
+    {:style {:width "30%" :overflow "auto"
+             :padding "1em" :borderRight "1px solid #ccc"
+             :display "flex" :flexDirection "column"}}
+    (when last-user
+     [message-bubble last-user])
+    ;; You’ll want your normal input/send/clear bar here:
+    [input-box]]
+
+   ;; Right: latest assistant message
+   [:div.right-pane
+    {:style {:flex "1" :overflow "auto" :padding "1em"}}
+    (when last-assistant
+     [message-bubble last-assistant])]]))
 
 (defn app []
       (r/create-class
@@ -308,15 +381,12 @@
              (case (:active-page @app-state)
 
                    :chat
-                   [:<>
-                    [:div#chat-box.chat-container
-                     {:ref #(reset! scroll-ref %)}
-                     (for [[i msg] (map-indexed vector (:messages @app-state))]
-                          ^{:key i} [message-bubble msg i])]
-                    (when (:streaming? @app-state)
-                          [:p.has-text-grey "Assistant is typing..."])
-                    [input-box]
-                    ]                                       ;; Clear chat button
+
+                   (case (-> @app-state :settings :layout)
+                    :chat-bubbles (render-bubble-layout)
+                    :left-right   (render-left-right-layout)
+                    :last-message (render-last-message-layout)
+                    )
 
                    :sessions [sessions-page]
 

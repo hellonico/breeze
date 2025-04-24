@@ -39,6 +39,7 @@
  (let [file (get-session-path filename)]
   (when (.exists file)
    (load-session-content file))))
+
 (defn remove-session[filename]
  (println "delete " filename)
  (.delete (get-session-path filename)))

@@ -4,7 +4,7 @@ body {
     font-style: normal;
 }
 #chat-box {
-    /*height: 500px;*/
+    min-height: 600px;
     overflow-y: auto;
     background-color: #f5f5f5;
     padding: 1em;
@@ -51,4 +51,13 @@ body {
 
 .copy-icon:hover {
     opacity: 1;
+}
+
+.markmap {
+    position: relative;
+}
+
+.markmap > svg {
+    width: 800px;
+    min-height: 300px;
 }

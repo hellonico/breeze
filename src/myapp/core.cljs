@@ -18,6 +18,7 @@
                   :settings         {:url           "http://localhost:11434"
                                      :model         "llama3.2:latest"
                                      :layout :chat-bubbles
+                                     :group ""
                                      :system-prompt ""}
                   :sessions         {}
                   :selected-session ""
@@ -62,7 +63,10 @@
                       (swap! app-state assoc
                              :messages user-messages
                              :settings (-> (:settings @app-state)
+                                           ; TODO: maybe no need to do one by one
                                            (assoc :model (:model data))
+                                           (assoc :layout (or (:layout data) (-> @app-state :settings :layout)))
+                                           (assoc :group (:group data))
                                            (assoc :system-prompt (:content system-msg)))
                              :active-page :chat
                              :streaming? false
@@ -142,7 +146,7 @@
       (swap! app-state update :sessions (fn[sessions] (remove #(= (:filename %) filename) sessions)))))
 
 (defn sessions-page []
-      [:div.container
+      [:div
        [:h2.title "Saved Sessions"]
        [:div.sessions-table
         [:table.table.is-fullwidth.is-hoverable

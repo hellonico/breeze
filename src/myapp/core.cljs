@@ -389,7 +389,8 @@
 (defn mindmap-view [markdown-text]
  (let [_ (println ">>>" markdown-text)]
   [:div
-   {:class "markmap"
+   {:style {:width "100%" :height "100%"}
+    :class "markmap"
     :dangerouslySetInnerHTML
     {:__html markdown-text}}]))
 
@@ -409,8 +410,8 @@
 
 
    ;; Left: latest user message + input
-   ;[:div.left-pane
-   [:div
+   [:div.left-pane
+   ;[:div
     {:style {:width   "30%" :overflow "auto"
              :padding "1em" :borderRight "1px solid #ccc"
              :display "flex" :flexDirection "column"}}
@@ -418,15 +419,15 @@
 
     (when last-user
      [message-bubble last-user])
-    ;; You’ll want your normal input/send/clear bar here:
+
+    ; TODO: add this somewhere
+    ;(when (:streaming? @app-state)
+    ; [:p.has-text-grey "Assistant is typing..."])
     ]
 
    ;; Right: latest assistant message
    [:div.right-pane
     {:style {:flex "1" :overflow "auto" :padding "1em"}}
-    ;(when (:streaming? @app-state)
-    ; [:p.has-text-grey "Assistant is typing..."])
-
 
     (mindmap-view map-content)
     ]]))

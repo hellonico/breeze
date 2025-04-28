@@ -109,8 +109,8 @@
    (let [messages (:messages @app-state)
          messages-to-send (if (and (<= (count messages) 2)  ;; Only user + assistant
                                    (not (clojure.string/blank? system-prompt)))
-                           (into [{:role :user :content system-prompt}] messages)
-                           ;(into [{:role :system :content system-prompt}] messages)
+                           ;(into [{:role :user :content system-prompt}] messages)
+                           (into [{:role :system :content system-prompt}] messages)
                            messages)]
     ;; Send to backend
     (chsk-send!
@@ -228,7 +228,8 @@
                                  (vec (subvec (vec msgs) 0 index))))]
   (fn [{:keys [role content index]}]
    (let [html (.render md-parser content)
-         copy-to-clipboard #(js/navigator.clipboard.writeText (if (= role :user) content html))
+         copy-to-clipboard-txt #(js/navigator.clipboard.writeText content)
+         copy-to-clipboard-html #(js/navigator.clipboard.writeText html)
          ]
     [:div.message-wrapper
      {:on-mouse-enter #(reset! hovered? true)
@@ -249,9 +250,13 @@
                 :font-size "0.8em"
                 :cursor    "pointer"}}
        [:span
-        {:on-click copy-to-clipboard
-         :title    "Copy to clipboard"}
+        {:on-click copy-to-clipboard-txt
+         :title    "Copy HTML to clipboard"}
         "📋"]
+       [:span
+        {:on-click copy-to-clipboard-html
+         :title    "Copy text to clipboard"}
+        "🏷️"]
        [:span
         {:on-click delete-from-here
          :title    "Delete from here"}

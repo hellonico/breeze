@@ -293,7 +293,7 @@
       :rows        1
       :style       {:resize     "none"
                     :overflow   "hidden"
-                    :min-height "2.5em"
+                    :min-height "20em"
                     :max-height "20em"}
       :on-change   #(let [new-val (.. % -target -value)]
                      (swap! app-state assoc :input new-val)
